@@ -3,79 +3,42 @@
 
 #include "TestActor.h"
 
-#include "Net/UnrealNetwork.h"
-
-void FMyStruct::GenerateData()
+ATestActor::ATestActor() : TimeSinceDataGenerated(5.0f)
 {
-	if (Data)
-	{
-		delete [] Data;
-		Data = nullptr;
-	}
+	bReplicates = true;
+	PrimaryActorTick.bCanEverTick = true;
 
-	DataSize = FMath::RandRange(10000, 60000);
-	int32 Value = FMath::RandRange(0, 5);
-
-	Data = new uint8[DataSize];
-	for (int Index = 0; Index < DataSize; ++Index)
-	{
-		Data[Index] = Value;
-	}
-
-	IntValue = Value;
+	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("RootComponent"));
+	Text = CreateDefaultSubobject<UTextRenderComponent>(TEXT("Text"));
+	Text->SetTextRenderColor(FColor::Cyan);
+	Text->SetXScale(5.0f);
+	Text->SetYScale(5.0f);
+	Text->SetupAttachment(RootComponent);
 }
 
-bool FMyStruct::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+void ATestActor::Tick(float DeltaSeconds)
 {
-	if (Ar.IsLoading() && Data)
-	{
-		delete [] Data;
-		Data = nullptr;
-	}
+	Super::Tick(DeltaSeconds);
 	
-	Ar << DataSize;
-	if (DataSize)
+	if (HasAuthority())
 	{
-		if (Ar.IsLoading())
+		TimeSinceDataGenerated += DeltaSeconds;
+		if (TimeSinceDataGenerated > 5.0f)
 		{
-			Data = new uint8[DataSize];
-		}
-		Ar.Serialize(Data, DataSize);
-
-		if (Ar.IsLoading())
-		{
-			IntValue = Data[0];
-			for (int Index = 0; Index < DataSize; ++Index)
-			{
-				check(Data[Index] == IntValue);
-			}
+			GenerateData(DataSize);
+			TimeSinceDataGenerated = 0.0f;
+			UE_LOG(LogTemp, Display, TEXT("Data generated: %d"), GetValue());
 		}
 	}
-
-	bOutSuccess = true;
-	return true;
+	Text->SetText(FText::AsNumber(GetValue()));
 }
 
-// Sets default values
-ATestActor::ATestActor()
+void ATestActor::GenerateData(int32 Size)
 {
-	ReplicatedValues.Add(FMyStruct());
-	ReplicatedValues.Add(FMyStruct());
-	ReplicatedValues.Add(FMyStruct());
-	ReplicatedValues.Add(FMyStruct());
-	ReplicatedValues.Add(FMyStruct());
 }
 
-void ATestActor::GenerateData()
+int32 ATestActor::GetValue() const
 {
-	for (FMyStruct& RV : ReplicatedValues)
-	{
-		RV.GenerateData();
-	}
+	return -1;
 }
 
-void ATestActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
-{
-	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(ATestActor, ReplicatedValues);
-}
